@@ -1,2 +1,5 @@
 # IDE files
 .idea
+
+# Debug and development files
+dev.py
