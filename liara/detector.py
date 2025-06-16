@@ -7,10 +7,10 @@ class Detector:
             self,
             cam,
             calibration_matrix: list[list[float]],
-            rt_matrix: list[list[float]],  # Новое
+            rt_matrix: list[list[float]],
             bg: np.ndarray,
             master_contour: np.ndarray,
-            height: float  # Высота камеры над плоскостью (в мм)
+            height: float
     ):
         self.cam = cam
         self.bg_gray = cv2.cvtColor(bg, cv2.COLOR_BGR2GRAY)
@@ -18,7 +18,7 @@ class Detector:
         self.K = np.array(calibration_matrix, dtype=np.float64)
         self.K_inv = np.linalg.inv(self.K)
         self.camera_height = height
-        self.rt_matrix = np.array(rt_matrix, dtype=np.float64)  # 4x4 матрица
+        self.rt_matrix = np.array(rt_matrix, dtype=np.float64)
 
     def detect_objects(
             self,
@@ -44,18 +44,15 @@ class Detector:
             if area < min_area:
                 continue
 
-            # Форма
             similarity = cv2.matchShapes(self.master_contour, cnt, cv2.CONTOURS_MATCH_I1, 0.0)
             if similarity > minimal_similarity:
                 continue
 
-            # Прямоугольник
             x, y, w, h = cv2.boundingRect(cnt)
             aspect_ratio = max(w, h) / min(w, h)
             if aspect_ratio > max_aspect_ratio:
                 continue
 
-            # Плотность (solidity = area / convex area)
             hull = cv2.convexHull(cnt)
             hull_area = cv2.contourArea(hull)
             if hull_area == 0:
@@ -64,7 +61,6 @@ class Detector:
             if solidity < min_solidity:
                 continue
 
-            # Центр массы
             M = cv2.moments(cnt)
             if M["m00"] == 0:
                 continue
@@ -82,4 +78,3 @@ class Detector:
             result.append((cnt, xyz_world))
 
         return result
-

@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 from .camera import CameraBase
-from .detector import Detector  # Импортируй, если Detector вынесен отдельно
+from .detector import Detector  
 
 
 def extract_background(cam: CameraBase) -> np.ndarray:
@@ -57,7 +57,7 @@ def extract_master_contour(cam: CameraBase, bg: np.ndarray) -> np.ndarray:
             cv2.imshow(window_name, display)
 
             key = cv2.waitKey(1) & 0xFF
-            if key == 27:  # ESC
+            if key == 27:  
                 break
 
         if contours:
