@@ -5,45 +5,70 @@ import numpy
 
 
 class CalibrationBase(abc.ABC):
+    """
+    Интерфейс класса калибровки.
+
+    """
+
+    @property
     @abc.abstractmethod
-    def get_calibration_matrix(self) -> list[list[float]]:
-        ...
+    def intrinsic_parameters(self) -> numpy.ndarray:
+        """
+        Атрибут матрицы внутренних параметров камеры.
+
+        :return: Матрица внутренних параметров камеры.
+        """
+
+    @property
+    @abc.abstractmethod
+    def distortion_coefficients(self) -> numpy.ndarray:
+        """
+        Атрибут вектора искажений камеры.
+
+        :return: Вектор-столбец искажений камеры.
+        """
 
 
 class CalibrationChAruco(CalibrationBase):
-    def __init__(self, images: list[numpy.ndarray], board_template: cv2.aruco.CharucoBoard):
-        corners_all = []
-        markers_ids_all = []
-        interpolated_corners_all = []
-        interpolated_ids_all = []
+    """
+    Класс калибровки камеры по методу ChAruco.
 
-        detector = cv2.aruco.CharucoDetector(board_template)
+    """
 
-        for num, img in enumerate(images):
+    def __init__(
+            self,
+            images: list[numpy.ndarray],
+            board: cv2.aruco.CharucoBoard
+    ):
+        # Инициализация массивов данных для калибровки
+        all_aruco_corners = []
+        all_aruco_ids = []
 
-            interpolated_corners, interpolated_ids, corners, marker_ids = detector.detectBoard(
-                img
-            )
+        # Инициализация детектора параметров калибровки
+        detector = cv2.aruco.CharucoDetector(board)
 
-            for parameter in (interpolated_corners, interpolated_ids, corners, marker_ids):
-                if parameter is None:
-                    raise ValueError(f"Bad image {num}")
+        # Подготовка данных для калибровки
+        for image in images:
+            # Сбор данных из изображения
+            aruco_corners, aruco_ids, _, _ = detector.detectBoard(image)
 
-            corners_all.append(corners)
-            markers_ids_all.append(marker_ids)
-            interpolated_corners_all.append(interpolated_corners)
-            interpolated_ids_all.append(interpolated_ids)
+            # Если найдены все параметры, данные изображения сохраняются
+            if None not in (aruco_corners, aruco_ids):
+                all_aruco_corners.append(aruco_corners)
+                all_aruco_ids.append(aruco_ids)
 
-        calibration_results = cv2.aruco.calibrateCameraCharuco(
-            interpolated_corners_all,
-            interpolated_ids_all,
-            board=board_template,
+        # Калибровка с последующей инициализацией атрибутов
+        _, self._intrinsic_parameters, self._distortion_coefficients, _, _ = cv2.aruco.calibrateCameraCharuco(
+            charucoCorners=all_aruco_corners,
+            charucoIds=all_aruco_ids,
+            board=board,
             imageSize=images[0].shape,
             cameraMatrix=None,
             distCoeffs=None,
         )
 
-        self._calibration_matrix: list[list[float]] = calibration_results[1].tolist()
+    def intrinsic_parameters(self) -> numpy.ndarray:
+        return self._intrinsic_parameters
 
-    def get_calibration_matrix(self) -> list[list[float]]:
-        return self._calibration_matrix
+    def distortion_coefficients(self) -> numpy.ndarray:
+        return self._distortion_coefficients

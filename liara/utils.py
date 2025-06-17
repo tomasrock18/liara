@@ -2,7 +2,28 @@ import cv2
 import numpy as np
 
 from .camera import CameraBase
-from .detector import Detector  
+from .detector import Detector
+
+
+def is_good_for_charuco_calibration(img: np.ndarray, charuco_board: cv2.aruco.CharucoBoard) -> bool:
+    """
+    Функция проверки изображения на пригодность для калибровки по методу ChAruco.
+
+    :param img: Изображение для проверки.
+    :param charuco_board: Объект доски, которая распознаётся в процессе калибровки.
+    :return: Флаг, если True, тогда изображение пригодно для использования в процессе калибровке.
+    """
+    # Инициализация детектора параметров калибровки
+    detector = cv2.aruco.CharucoDetector(charuco_board)
+
+    # Сбор данных из изображения
+    aruco_corners, aruco_ids, _, _ = detector.detectBoard(img)
+
+    # Если не найдены все параметры, то изображение считается непригодным
+    if None in (aruco_corners, aruco_ids):
+        return False
+    else:
+        return True
 
 
 def extract_background(cam: CameraBase) -> np.ndarray:
@@ -57,7 +78,7 @@ def extract_master_contour(cam: CameraBase, bg: np.ndarray) -> np.ndarray:
             cv2.imshow(window_name, display)
 
             key = cv2.waitKey(1) & 0xFF
-            if key == 27:  
+            if key == 27:
                 break
 
         if contours:
@@ -70,12 +91,12 @@ def extract_master_contour(cam: CameraBase, bg: np.ndarray) -> np.ndarray:
 
 
 def start_detector_tuning(
-    cam: CameraBase,
-    calibration_matrix: list[list[float]],
-    rt_matrix: list[list[float]],
-    bg: np.ndarray,
-    master_contour: np.ndarray,
-    camera_height: float
+        cam: CameraBase,
+        calibration_matrix: list[list[float]],
+        rt_matrix: list[list[float]],
+        bg: np.ndarray,
+        master_contour: np.ndarray,
+        camera_height: float
 ):
     window_name = "Detector Tuning"
     cv2.namedWindow(window_name)
@@ -136,4 +157,3 @@ def start_detector_tuning(
 
     finally:
         cv2.destroyWindow(window_name)
-
