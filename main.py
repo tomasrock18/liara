@@ -12,14 +12,10 @@ if __name__ == "__main__":
     master_contour = liara.extract_master_contour(cam, bg)
 
     
-    calibration_matrix = [
-        [1434, 0, 940],
-        [0, 1438, 533],
-        [0, 0, 1]
-    ]
+    calibration_matrix = [[931.9895743944785, 0.0, 501.0050734755087], [0.0, 934.6793601000484, 365.30255095313805], [0.0, 0.0, 1.0]]
 
     
-    camera_height = 42 - 4.4
+    camera_height = 51.5
 
     
     rt_matrix = [

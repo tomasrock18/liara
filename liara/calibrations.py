@@ -12,7 +12,6 @@ class CalibrationBase(abc.ABC):
 
 class CalibrationChAruco(CalibrationBase):
     def __init__(self, images: list[numpy.ndarray], board_template: cv2.aruco.CharucoBoard):
-
         corners_all = []
         markers_ids_all = []
         interpolated_corners_all = []
@@ -23,7 +22,7 @@ class CalibrationChAruco(CalibrationBase):
         for num, img in enumerate(images):
 
             interpolated_corners, interpolated_ids, corners, marker_ids = detector.detectBoard(
-                cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                img
             )
 
             for parameter in (interpolated_corners, interpolated_ids, corners, marker_ids):
