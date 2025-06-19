@@ -21,7 +21,7 @@ INTERFACE_DOWNLOAD_SAVED_IMAGES = "d"
 
 # Инициализация прочих переменных
 OTHER_IMG_DIR_PATH = pathlib.Path("images")
-OTHER_WINDOW_SIZE = (1000, 1000)
+OTHER_WINDOW_SIZE = (1920, 1080)
 OTHER_RESULT_FILE_PATH = pathlib.Path("calibration_results.json")
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ import liara
 # Инициализация параметров камеры и детектируемой доски
 CAMERA_ID = 1
 CAMERA_FRAME_SIZE = (1080, 1920)
-CAMERA_INITIAL_FOCUS = 35
+CAMERA_INITIAL_FOCUS = 40
 BOARD_SIZE = (7, 9)
 BOARD_MARKER_LENGTH_M = 0.025
 BOARD_SQUARE_LENGTH_M = 0.03
