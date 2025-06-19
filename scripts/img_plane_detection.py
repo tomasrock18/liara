@@ -84,10 +84,11 @@ if __name__ == "__main__":
                     cv2.aruco.drawDetectedMarkers(frame, [data['corners']], np.array([[marker_id]]))
 
                     # Отображаем оси маркера
-                    cv2.drawFrameAxes(
-                        frame, intrinsic_matrix, distortion_vector,
-                        data['rvec'], data['tvec'], BOARD_MARKER_LENGTH_M * 0.5
-                    )
+                    if marker_id == 3:
+                        cv2.drawFrameAxes(
+                            frame, intrinsic_matrix, distortion_vector,
+                            data['rvec'], data['tvec'], BOARD_MARKER_LENGTH_M * 0.5
+                        )
 
                     # Отображаем координаты
                     corner = tuple(data['corners'][0][0].astype(int))
