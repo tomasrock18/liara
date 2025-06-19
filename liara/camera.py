@@ -20,3 +20,16 @@ class CameraLab(CameraBase):
 
     def get_frame(self) -> numpy.ndarray:
         return self._framer.read()[1]
+
+    @property
+    def focus(self) -> float:
+        """
+        Атрибут, отвечающий за установку фокусного расстояния камеры.
+
+        :return: Текущее значение фокусного расстояния.
+        """
+        return self._framer.get(cv2.CAP_PROP_FOCUS)
+
+    @focus.setter
+    def focus(self, value: float) -> None:
+        self._framer.set(cv2.CAP_PROP_FOCUS, value)

@@ -1,3 +1,5 @@
+import json
+
 import cv2
 import pathlib
 
@@ -5,7 +7,7 @@ import liara
 
 # Инициализация параметров для калибровки
 CAMERA_ID = 1
-CAMERA_FRAME_SIZE = (1920, 1080)
+CAMERA_FRAME_SIZE = (1080, 1920)
 BOARD_SIZE = (7, 9)
 BOARD_MARKER_LENGTH_M = 0.025
 BOARD_SQUARE_LENGTH_M = 0.03
@@ -15,11 +17,17 @@ BOARD_ARUCO_DICTIONARY = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_
 INTERFACE_SAVE_BUTTON = "s"
 INTERFACE_ADD_BUTTON = "a"
 INTERFACE_CALIBRATE_BUTTON = "c"
+INTERFACE_DOWNLOAD_SAVED_IMAGES = "d"
 
-# Инициализация пути к папке с сохранёнными изображениями
+# Инициализация прочих переменных
 OTHER_IMG_DIR_PATH = pathlib.Path("images")
+OTHER_WINDOW_SIZE = (1000, 1000)
+OTHER_RESULT_FILE_PATH = pathlib.Path("calibration_results.json")
 
 if __name__ == "__main__":
+    # Инициализация названия отображаемого окна
+    window_name = "Calibration Tool"
+
     # Создание папки с сохранёнными изображениями
     OTHER_IMG_DIR_PATH.mkdir(exist_ok=True)
 
@@ -39,10 +47,20 @@ if __name__ == "__main__":
         camera_id=CAMERA_ID,
         frame_size=CAMERA_FRAME_SIZE,
     )
+    # Инициализация отображаемого окна
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(window_name, OTHER_WINDOW_SIZE[0], OTHER_WINDOW_SIZE[1])
+
+    # Добавление ползунка управления фокусом камеры
+    focus_trackbar_name = "Focus"
+    cv2.createTrackbar(focus_trackbar_name, window_name, int(cam.focus), 100, lambda x: None)
 
     # Запуск цикла захвата изображений
     try:
         while True:
+            # Обновление фокуса камеры
+            cam.focus = cv2.getTrackbarPos(focus_trackbar_name, window_name)
+
             # Получение снимка от камеры
             frame = cam.get_frame()
 
@@ -74,7 +92,7 @@ if __name__ == "__main__":
                 org=(10, 60),
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                 fontScale=1,
-                color=(0, 255, 0) if is_img_good else (255, 0, 0),
+                color=(0, 255, 0) if is_img_good else (0, 0, 255),
                 thickness=2
             )
 
@@ -86,7 +104,7 @@ if __name__ == "__main__":
             )
 
             # Вывод окна утилиты
-            cv2.imshow("Calibration tool", frame)
+            cv2.imshow(window_name, frame)
 
             # Обработка пользовательской команды
             key = cv2.waitKey(1) & 0xFF
@@ -100,6 +118,9 @@ if __name__ == "__main__":
             elif key == ord(INTERFACE_CALIBRATE_BUTTON):
                 print("All images captured! Calibration started!")
                 break
+            elif key == ord(INTERFACE_DOWNLOAD_SAVED_IMAGES):
+                for image_path in OTHER_IMG_DIR_PATH.iterdir():
+                    calibration_images.append(cv2.cvtColor(cv2.imread(image_path.as_posix()), cv2.COLOR_BGR2GRAY))
     finally:
         cv2.destroyAllWindows()
 
@@ -112,3 +133,11 @@ if __name__ == "__main__":
     # Вывод результатов калибровки
     print(f"intrinsic camera parameters: {calibration.intrinsic_parameters()}")
     print(f"Distortion coefficients: {calibration.distortion_coefficients()}")
+
+    # Сохранение результатов калибровки
+    calibration_results = {
+        "intrinsic_matrix": calibration.intrinsic_parameters().tolist(),
+        "distortion_vector": calibration.distortion_coefficients().tolist()
+    }
+    with open(OTHER_RESULT_FILE_PATH, "w") as file:
+        json.dump(calibration_results, file)

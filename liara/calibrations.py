@@ -3,6 +3,8 @@ import abc
 import cv2
 import numpy
 
+from .utils import is_good_for_charuco_calibration
+
 
 class CalibrationBase(abc.ABC):
     """
@@ -53,9 +55,13 @@ class CalibrationChAruco(CalibrationBase):
             aruco_corners, aruco_ids, _, _ = detector.detectBoard(image)
 
             # Если найдены все параметры, данные изображения сохраняются
-            if None not in (aruco_corners, aruco_ids):
+            if is_good_for_charuco_calibration(image, board):
                 all_aruco_corners.append(aruco_corners)
                 all_aruco_ids.append(aruco_ids)
+
+        # Если не найдено ни одного параметра, выбрасывается исключения
+        assert len(all_aruco_corners) == len(all_aruco_ids)
+        assert len(all_aruco_corners) != 0
 
         # Калибровка с последующей инициализацией атрибутов
         _, self._intrinsic_parameters, self._distortion_coefficients, _, _ = cv2.aruco.calibrateCameraCharuco(
