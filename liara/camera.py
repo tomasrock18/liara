@@ -17,6 +17,7 @@ class CameraLab(CameraBase):
         self._framer.set(cv2.CAP_PROP_FRAME_WIDTH, frame_size[1])
         self._framer.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_size[0])
         self._framer.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc(*codec))
+        # print(self._framer.get(cv2.CAP_PROP_XI_SENSOR_CLOCK_FREQ_HZ))
 
     def get_frame(self) -> numpy.ndarray:
         return self._framer.read()[1]
