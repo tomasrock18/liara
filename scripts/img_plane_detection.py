@@ -81,22 +81,20 @@ if __name__ == "__main__":
                     data['world_coords'] = world_coords
 
                     # Отображаем только целевые маркеры
-                    cv2.aruco.drawDetectedMarkers(frame, [data['corners']], np.array([[marker_id]]))
+                    # cv2.aruco.drawDetectedMarkers(frame, [data['corners']], np.array([[marker_id]]))
 
-                    # Отображаем оси маркера
-                    if marker_id == 3:
-                        cv2.drawFrameAxes(
-                            frame, intrinsic_matrix, distortion_vector,
-                            data['rvec'], data['tvec'], BOARD_MARKER_LENGTH_M * 0.5
-                        )
 
-                    # Отображаем координаты
-                    corner = tuple(data['corners'][0][0].astype(int))
-                    coord_text = f"ID {marker_id}: ({world_coords[0]:.3f}, {world_coords[1]:.3f}, {world_coords[2]:.3f})"
+                    # Вычисляем центр маркера для отображения текста
+                    center = np.mean(data['corners'][0], axis=0).astype(int)
+                    corner = tuple(center)
+
+                    coord_text = f"ID {marker_id}: ({world_coords[1]:.3f}, {world_coords[0]:.3f}, {world_coords[2]:.3f})"
                     cv2.putText(
                         frame, coord_text, (corner[0], corner[1] - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2
                     )
+                    # Рисуем точку в центре маркера
+                    cv2.circle(frame, corner, 3, (0, 255, 0), -1)
 
         # Показываем результат
         cv2.imshow("ArUco Marker Detection", cv2.resize(frame, OTHER_WINDOW_SIZE))
