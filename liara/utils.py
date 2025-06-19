@@ -17,7 +17,7 @@ def is_good_for_charuco_calibration(img: np.ndarray, charuco_board: cv2.aruco.Ch
     aruco_corners, aruco_ids, _, _ = detector.detectBoard(img)
 
     # Если не найдены все параметры, то изображение считается непригодным
-    if all((aruco_corners, aruco_ids)):
-        return False
-    else:
+    if aruco_corners is not None and len(aruco_corners) > 0:
         return True
+    else:
+        return False
