@@ -13,6 +13,7 @@ BOARD_MARKER_LENGTH_M = 0.025
 OTHER_QUIT_KEY = "q"
 OTHER_WINDOW_SIZE = (1920, 1080)
 OTHER_CALIBRATION_RESULTS_FILE_PATH = pathlib.Path("calibration_results.json")
+PLANE_SAVE_FILE = pathlib.Path("plane.json")
 
 # Новые переменные для функционала
 mouse_pos = (0, 0)
@@ -20,6 +21,7 @@ click_positions = []
 plane_equation = None
 reference_rotation = None
 reference_tvec = None
+projection_matrix = None
 
 
 def mouse_callback(event, x, y, flags, param):
@@ -54,6 +56,26 @@ def pixel_to_world(point_px, intrinsic_matrix, distortion_vector, rvec, tvec, pl
         intersection = world_ray_origin + t * world_ray_dir
         return intersection
     return None
+
+
+def calculate_projection_matrix(intrinsic_matrix, distortion_vector, rvec, tvec, plane_normal, plane_point):
+    # Получаем матрицу поворота
+    rotation_matrix, _ = cv2.Rodrigues(rvec)
+
+    # Матрица перехода от мировых координат к координатам камеры
+    extrinsic = np.hstack((rotation_matrix, tvec.reshape(3, 1)))
+
+    # Матрица проекции (3x4)
+    P = intrinsic_matrix @ extrinsic
+
+    # Находим преобразование для плоскости
+    # Уравнение плоскости: n·X + d = 0
+    d = -np.dot(plane_normal, plane_point)
+    H = P[:, [0, 1, 3]] - (P[:, 2] * np.array([plane_normal[0], plane_normal[1], 0]) / (-d))
+
+    # Добавляем компоненту для z=0
+    M = np.linalg.inv(H)
+    return M.tolist()
 
 
 if __name__ == "__main__":
@@ -147,11 +169,22 @@ if __name__ == "__main__":
                     d = -np.dot(normal, centroid)
                     plane_equation = (normal, d, centroid)  # Сохраняем нормаль, d и центроид
 
+                    # Вычисляем матрицу проекции
+                    projection_matrix = calculate_projection_matrix(
+                        intrinsic_matrix, distortion_vector,
+                        reference_rvec, reference_tvec,
+                        normal, centroid
+                    )
+
         # 1. Отображаем уравнение плоскости в верхнем левом углу
         if plane_equation is not None:
             normal, d, _ = plane_equation
             eq_text = f"Plane: {normal[0]:.2f}x + {normal[1]:.2f}y + {normal[2]:.2f}z + {d:.2f} = 0"
             cv2.putText(frame, eq_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+            # Отображаем информацию о матрице проекции
+            cv2.putText(frame, "Press 's' to save projection matrix", (10, 90),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
         # 2. Отображаем позицию мыши
         cv2.putText(frame, f"Mouse: {mouse_pos[0]}, {mouse_pos[1]}", (10, 60),
@@ -166,8 +199,15 @@ if __name__ == "__main__":
                 cv2.circle(frame, click, 5, (0, 0, 255), -1)
 
                 # Преобразуем координаты клика в мировые координаты
-                world_point = pixel_to_world(click, intrinsic_matrix, distortion_vector,
-                                             reference_rvec, reference_tvec, normal, plane_point)
+                if projection_matrix is not None:
+                    # Используем матрицу проекции для преобразования
+                    uv1 = np.array([click[0], click[1], 1])
+                    world_point = projection_matrix @ uv1
+                    world_point /= world_point[2]  # Нормализуем
+                else:
+                    # Альтернативный метод (если матрица проекции не вычислена)
+                    world_point = pixel_to_world(click, intrinsic_matrix, distortion_vector,
+                                                 reference_rvec, reference_tvec, normal, plane_point)
 
                 if world_point is not None:
                     coord_text = f"({world_point[0]:.3f}, {world_point[1]:.3f}, {world_point[2]:.3f})"
@@ -177,8 +217,19 @@ if __name__ == "__main__":
         # Показываем результат
         cv2.imshow("ArUco Marker Detection", cv2.resize(frame, OTHER_WINDOW_SIZE))
 
+        key = cv2.waitKey(1) & 0xFF
         # Выход по нажатию 'q'
-        if cv2.waitKey(1) & 0xFF == ord(OTHER_QUIT_KEY):
+        if key == ord(OTHER_QUIT_KEY):
             break
+        # Сохранение матрицы проекции по нажатию 's'
+        elif key == ord('s') and projection_matrix is not None:
+            data_to_save = {
+                "projection_matrix": projection_matrix,
+                "plane_normal": normal.tolist(),
+                "plane_d": float(d)
+            }
+            with open(PLANE_SAVE_FILE, "w") as f:
+                json.dump(data_to_save, f)
+            print(f"Projection matrix saved to {PLANE_SAVE_FILE}")
 
     cv2.destroyAllWindows()
