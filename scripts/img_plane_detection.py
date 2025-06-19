@@ -18,6 +18,8 @@ OTHER_CALIBRATION_RESULTS_FILE_PATH = pathlib.Path("calibration_results.json")
 mouse_pos = (0, 0)
 click_positions = []
 plane_equation = None
+reference_rotation = None
+reference_tvec = None
 
 
 def mouse_callback(event, x, y, flags, param):
@@ -25,6 +27,33 @@ def mouse_callback(event, x, y, flags, param):
     mouse_pos = (x, y)
     if event == cv2.EVENT_LBUTTONDOWN:
         click_positions.append((x, y))
+
+
+def pixel_to_world(point_px, intrinsic_matrix, distortion_vector, rvec, tvec, plane_normal, plane_point):
+    # Преобразуем точку из пикселей в луч в 3D пространстве
+    undistorted_point = cv2.undistortPoints(np.array([[point_px]], dtype=np.float32),
+                                            intrinsic_matrix, distortion_vector)
+    undistorted_point = undistorted_point[0][0]
+
+    # Направляющий вектор луча (в системе координат камеры)
+    ray_dir = np.array([undistorted_point[0], undistorted_point[1], 1.0])
+    ray_dir = ray_dir / np.linalg.norm(ray_dir)
+
+    # Точка на луче (в системе координат камеры)
+    ray_origin = np.array([0, 0, 0])
+
+    # Переводим луч в мировую систему координат
+    rotation_matrix, _ = cv2.Rodrigues(rvec)
+    world_ray_dir = rotation_matrix.T @ ray_dir
+    world_ray_origin = rotation_matrix.T @ (ray_origin - tvec)
+
+    # Находим пересечение луча с плоскостью
+    denom = np.dot(plane_normal, world_ray_dir)
+    if abs(denom) > 1e-6:
+        t = np.dot(plane_point - world_ray_origin, plane_normal) / denom
+        intersection = world_ray_origin + t * world_ray_dir
+        return intersection
+    return None
 
 
 if __name__ == "__main__":
@@ -41,11 +70,6 @@ if __name__ == "__main__":
     # Инициализация камеры
     cam = liara.CameraLab(CAMERA_ID, CAMERA_FRAME_SIZE)
     cam.focus = CAMERA_INITIAL_FOCUS
-
-    # Переменные для хранения опорной системы координат (маркер 3)
-    reference_rvec = None
-    reference_tvec = None
-    reference_rotation = None
 
     # Создаем окно и устанавливаем обработчик мыши
     cv2.namedWindow("ArUco Marker Detection")
@@ -79,20 +103,20 @@ if __name__ == "__main__":
             # Если найден маркер 3, используем его как опорный
             if 3 in markers:
                 reference_rvec = markers[3]['rvec']
-                reference_tvec = markers[3]['tvec']
+                reference_tvec = markers[3]['tvec'][0]  # Используем [0] чтобы получить 1D массив
 
                 # Получаем матрицу поворота для опорного маркера
                 reference_rotation, _ = cv2.Rodrigues(reference_rvec)
 
             # Если есть опорная система координат, вычисляем относительные координаты
-            if reference_rotation is not None:
+            if reference_rotation is not None and reference_tvec is not None:
                 for marker_id, data in markers.items():
                     if marker_id == 3:
                         # Для опорного маркера координаты (0,0,0)
                         world_coords = np.array([0, 0, 0])
                     else:
                         # Вычисляем относительные координаты
-                        relative_tvec = data['tvec'][0] - reference_tvec[0]
+                        relative_tvec = data['tvec'][0] - reference_tvec
 
                         # Преобразуем в мировую систему координат (поворачиваем обратно)
                         world_coords = np.dot(reference_rotation.T, relative_tvec)
@@ -105,7 +129,7 @@ if __name__ == "__main__":
                     center = np.mean(data['corners'][0], axis=0).astype(int)
                     corner = tuple(center)
 
-                    coord_text = f"ID {marker_id}: ({world_coords[1]:.3f}, {world_coords[0]:.3f}, {world_coords[2]:.3f})"
+                    coord_text = f"ID {marker_id}: ({world_coords[0]:.3f}, {world_coords[1]:.3f}, {world_coords[2]:.3f})"
                     cv2.putText(
                         frame, coord_text, (corner[0], corner[1] - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2
@@ -113,42 +137,42 @@ if __name__ == "__main__":
                     # Рисуем точку в центре маркера
                     cv2.circle(frame, corner, 3, (0, 255, 0), -1)
 
-                # Вычисляем уравнение плоскости, если есть 4 точки
-                if len(plane_points) == 4:
+                # Вычисляем уравнение плоскости, если есть 3 или более точек
+                if len(plane_points) >= 3:
                     points = np.array(plane_points)
                     centroid = np.mean(points, axis=0)
                     centered = points - centroid
                     _, _, vh = np.linalg.svd(centered)
                     normal = vh[2, :]
                     d = -np.dot(normal, centroid)
-                    plane_equation = np.append(normal, d)
+                    plane_equation = (normal, d, centroid)  # Сохраняем нормаль, d и центроид
 
         # 1. Отображаем уравнение плоскости в верхнем левом углу
         if plane_equation is not None:
-            eq_text = f"Plane: {plane_equation[0]:.2f}x + {plane_equation[1]:.2f}y + {plane_equation[2]:.2f}z + {plane_equation[3]:.2f} = 0"
+            normal, d, _ = plane_equation
+            eq_text = f"Plane: {normal[0]:.2f}x + {normal[1]:.2f}y + {normal[2]:.2f}z + {d:.2f} = 0"
             cv2.putText(frame, eq_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
         # 2. Отображаем позицию мыши
-        cv2.putText(frame, f"Mouse: {mouse_pos[0]}, {mouse_pos[1]}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                    (255, 255, 0), 2)
+        cv2.putText(frame, f"Mouse: {mouse_pos[0]}, {mouse_pos[1]}", (10, 60),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
         # 3. Обрабатываем клики мыши и отображаем точки
-        for click in click_positions:
-            cv2.circle(frame, click, 5, (0, 0, 255), -1)
+        if reference_rotation is not None and reference_tvec is not None and plane_equation is not None:
+            normal, d, centroid = plane_equation
+            plane_point = np.array([0, 0, -d / normal[2]]) if normal[2] != 0 else np.array([0, 0, 0])
 
-            if plane_equation is not None:
+            for click in click_positions:
+                cv2.circle(frame, click, 5, (0, 0, 255), -1)
+
                 # Преобразуем координаты клика в мировые координаты
-                # (Это упрощенное преобразование, может потребоваться доработка)
-                z = 0  # Предполагаем, что точка лежит на плоскости (z=0)
-                x = (click[0] - frame.shape[1] / 2) * 0.001  # Примерное преобразование
-                y = (click[1] - frame.shape[0] / 2) * 0.001  # Примерное преобразование
+                world_point = pixel_to_world(click, intrinsic_matrix, distortion_vector,
+                                             reference_rvec, reference_tvec, normal, plane_point)
 
-                # Используем уравнение плоскости для уточнения координат
-                if plane_equation[2] != 0:
-                    z = (-plane_equation[3] - plane_equation[0] * x - plane_equation[1] * y) / plane_equation[2]
-
-                coord_text = f"({x:.3f}, {y:.3f}, {z:.3f})"
-                cv2.putText(frame, coord_text, (click[0] + 10, click[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+                if world_point is not None:
+                    coord_text = f"({world_point[0]:.3f}, {world_point[1]:.3f}, {world_point[2]:.3f})"
+                    cv2.putText(frame, coord_text, (click[0] + 10, click[1]),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
         # Показываем результат
         cv2.imshow("ArUco Marker Detection", cv2.resize(frame, OTHER_WINDOW_SIZE))
