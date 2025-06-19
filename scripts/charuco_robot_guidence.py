@@ -9,6 +9,7 @@ BOARD_SIZE = (7, 9)
 BOARD_MARKER_LENGTH_M = 0.025
 BOARD_SQUARE_LENGTH_M = 0.03
 BOARD_ARUCO_DICTIONARY = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL)
+PLANE_MARKERS_IDS = (3, 6, 24, 27)
 #####################################################################
 
 
@@ -151,4 +152,7 @@ while True:
         cv2.destroyAllWindows()
         break
 
+#####################################################################
+
+# 4) Выполняем построение плоскости преобразования
 #####################################################################
