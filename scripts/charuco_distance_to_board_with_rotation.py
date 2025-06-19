@@ -17,7 +17,7 @@ BOARD_ARUCO_DICTIONARY = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_
 
 # Инициализация прочих переменных
 OTHER_QUIT_KEY = "q"
-OTHER_WINDOW_SIZE = (1000, 1000)
+OTHER_WINDOW_SIZE = (1000, 500)
 OTHER_CALIBRATION_RESULTS_FILE_PATH = pathlib.Path("calibration_results.json")
 
 if __name__ == "__main__":
