@@ -1,86 +1,101 @@
 import json
 import cv2
-import numpy
+import numpy as np
 import pathlib
 import liara
 
-# Инициализация параметров камеры и детектируемой доски
+# Параметры
 CAMERA_ID = 1
 CAMERA_FRAME_SIZE = (1080, 1920)
 CAMERA_INITIAL_FOCUS = 40
-BOARD_SIZE = (7, 9)
+TARGET_IDS = {3, 6, 24, 27}  # ID маркеров, которые мы ищем
 BOARD_MARKER_LENGTH_M = 0.025
-BOARD_SQUARE_LENGTH_M = 0.03
-BOARD_ARUCO_DICTIONARY = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL)
-
-# Инициализация прочих переменных
 OTHER_QUIT_KEY = "q"
-OTHER_WINDOW_SIZE = (1000, 500)
+OTHER_WINDOW_SIZE = (1920, 1080)
 OTHER_CALIBRATION_RESULTS_FILE_PATH = pathlib.Path("calibration_results.json")
 
 if __name__ == "__main__":
-    # Чтение данных калибровки камеры
+    # Загрузка параметров камеры
     with open(OTHER_CALIBRATION_RESULTS_FILE_PATH, "r") as file:
         calibration_results = json.load(file)
-    intrinsic_matrix = numpy.array(calibration_results["intrinsic_matrix"])
-    distortion_vector = numpy.array(calibration_results["distortion_vector"])
+    intrinsic_matrix = np.array(calibration_results["intrinsic_matrix"])
+    distortion_vector = np.array(calibration_results["distortion_vector"])
 
     # Инициализация детектора
-    detector = cv2.aruco.ArucoDetector(BOARD_ARUCO_DICTIONARY, cv2.aruco.DetectorParameters())
+    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL)
+    detector = cv2.aruco.ArucoDetector(aruco_dict, cv2.aruco.DetectorParameters())
 
     # Инициализация камеры
     cam = liara.CameraLab(CAMERA_ID, CAMERA_FRAME_SIZE)
     cam.focus = CAMERA_INITIAL_FOCUS
 
+    # Переменные для хранения опорной системы координат (маркер 3)
+    reference_rvec = None
+    reference_tvec = None
+    reference_rotation = None
+
     while True:
         frame = cam.get_frame()
-
-        # Обнаружение маркеров
         corners, ids, _ = detector.detectMarkers(frame)
 
-        # Обработка только целевых маркеров
         if ids is not None:
-            for marker_id, marker_corners in zip(ids, corners):
-                if marker_id in (3, 6, 24, 27):
-                    rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        marker_corners,
-                        BOARD_MARKER_LENGTH_M,
-                        intrinsic_matrix,
-                        distortion_vector,
-                    )
+            # Словарь для хранения позиций маркеров
+            markers = {}
 
-                    # Получаем координаты центра маркера
-                    center = tvec[0][0]
+            # Оценка позы для всех маркеров
+            rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+                corners, BOARD_MARKER_LENGTH_M, intrinsic_matrix, distortion_vector)
+
+            # Сохраняем данные только для целевых маркеров
+            for i, marker_id in enumerate(ids.flatten()):
+                if marker_id in TARGET_IDS:
+                    markers[marker_id] = {
+                        'corners': corners[i],
+                        'rvec': rvecs[i],
+                        'tvec': tvecs[i],
+                        'center': tvecs[i][0]  # Центр маркера в координатах камеры
+                    }
+
+            # Если найден маркер 3, используем его как опорный
+            if 3 in markers:
+                reference_rvec = markers[3]['rvec']
+                reference_tvec = markers[3]['tvec']
+
+                # Получаем матрицу поворота для опорного маркера
+                reference_rotation, _ = cv2.Rodrigues(reference_rvec)
+
+            # Если есть опорная система координат, вычисляем относительные координаты
+            if reference_rotation is not None:
+                for marker_id, data in markers.items():
+                    if marker_id == 3:
+                        # Для опорного маркера координаты (0,0,0)
+                        world_coords = np.array([0, 0, 0])
+                    else:
+                        # Вычисляем относительные координаты
+                        relative_tvec = data['tvec'][0] - reference_tvec[0]
+
+                        # Преобразуем в мировую систему координат (поворачиваем обратно)
+                        world_coords = np.dot(reference_rotation.T, relative_tvec)
+
+                    # Сохраняем мировые координаты
+                    data['world_coords'] = world_coords
+
+                    # Отображаем только целевые маркеры
+                    cv2.aruco.drawDetectedMarkers(frame, [data['corners']], np.array([[marker_id]]))
 
                     # Отображаем оси маркера
                     cv2.drawFrameAxes(
-                        frame,
-                        intrinsic_matrix,
-                        distortion_vector,
-                        rvec,
-                        tvec,
-                        BOARD_MARKER_LENGTH_M * 0.5
+                        frame, intrinsic_matrix, distortion_vector,
+                        data['rvec'], data['tvec'], BOARD_MARKER_LENGTH_M * 0.5
                     )
 
-                    # Подготавливаем текст с координатами
-                    coord_text = f"ID {marker_id[0]}: ({center[0]:.3f}, {center[1]:.3f}, {center[2]:.3f})"
-
-                    # Вычисляем позицию для текста
-                    text_position = tuple(marker_corners[0][0].astype(int))
-
-                    # Рисуем текст с координатами
+                    # Отображаем координаты
+                    corner = tuple(data['corners'][0][0].astype(int))
+                    coord_text = f"ID {marker_id}: ({world_coords[0]:.3f}, {world_coords[1]:.3f}, {world_coords[2]:.3f})"
                     cv2.putText(
-                        frame,
-                        coord_text,
-                        text_position,
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (0, 255, 0),
-                        2
+                        frame, coord_text, (corner[0], corner[1] - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2
                     )
-
-            # Отображаем все обнаруженные маркеры
-            cv2.aruco.drawDetectedMarkers(frame, corners, ids)
 
         # Показываем результат
         cv2.imshow("ArUco Marker Detection", cv2.resize(frame, OTHER_WINDOW_SIZE))
