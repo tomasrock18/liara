@@ -22,6 +22,7 @@ class ObjectTracker:
         self.cam.focus = CAMERA_INITIAL_FOCUS
         self.min_contour_area = 500
         self.similarity_threshold = 0.7
+        self.current_threshold = 40  # Начальное значение threshold
 
     def load_calibration_data(self):
         with open(CALIBRATION_FILE) as f:
@@ -60,7 +61,7 @@ class ObjectTracker:
 
             # Вычитание фона
             diff = cv2.absdiff(gray, self.background)
-            _, thresh = cv2.threshold(diff, 40, 255, cv2.THRESH_BINARY)
+            _, thresh = cv2.threshold(diff, self.current_threshold, 255, cv2.THRESH_BINARY)
             thresh = cv2.erode(thresh, None, iterations=2)
             thresh = cv2.dilate(thresh, None, iterations=2)
 
@@ -121,45 +122,64 @@ class ObjectTracker:
 
     def run_detection(self):
         cv2.namedWindow("Detection")
+
+        # Создаем trackbar для threshold
+        cv2.createTrackbar('Threshold', 'Detection', self.current_threshold, 255, lambda x: None)
+
         print("Обнаружение объектов. Нажмите 'q' для выхода")
 
+        # Создаем буфер для отображения
+        display_buffer = None
+
         while True:
+            # Получаем текущее значение threshold
+            self.current_threshold = cv2.getTrackbarPos('Threshold', 'Detection')
+
             frame = self.cam.get_frame()
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
             # Вычитание фона
             diff = cv2.absdiff(gray, self.background)
-            _, thresh = cv2.threshold(diff, 40, 255, cv2.THRESH_BINARY)
+            _, thresh = cv2.threshold(diff, self.current_threshold, 255, cv2.THRESH_BINARY)
             thresh = cv2.erode(thresh, None, iterations=2)
             thresh = cv2.dilate(thresh, None, iterations=2)
 
             # Поиск контуров
             contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            # Отображение
-            display = frame.copy()
+            # Создаем новое изображение для отображения
+            if display_buffer is None:
+                display_buffer = frame.copy()
+            else:
+                np.copyto(display_buffer, frame)
+
             for cnt in contours:
                 if cv2.contourArea(cnt) > self.min_contour_area:
                     similarity = self.contour_similarity(cnt, self.master_contour)
                     if similarity > self.similarity_threshold:
                         # Рисуем контур
-                        cv2.drawContours(display, [cnt], -1, (0, 255, 0), 2)
+                        cv2.drawContours(display_buffer, [cnt], -1, (0, 255, 0), 2)
 
                         # Вычисляем центр масс
                         M = cv2.moments(cnt)
                         if M["m00"] != 0:
                             cx = int(M["m10"] / M["m00"])
                             cy = int(M["m01"] / M["m00"])
-                            cv2.circle(display, (cx, cy), 5, (0, 0, 255), -1)
+                            cv2.circle(display_buffer, (cx, cy), 5, (0, 0, 255), -1)
 
                             # Вычисляем 3D координаты
                             world_pos = self.calculate_3d_position((cx, cy))
                             if world_pos is not None:
                                 coord_text = f"({world_pos[0]:.2f}, {world_pos[1]:.2f}, {world_pos[2]:.2f})"
-                                cv2.putText(display, coord_text, (cx + 10, cy),
+                                cv2.putText(display_buffer, coord_text, (cx + 10, cy),
                                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
-            cv2.imshow("Detection", cv2.resize(display, (1920, 1080)))
+            # Добавляем информацию о текущем threshold
+            cv2.putText(display_buffer, f"Threshold: {self.current_threshold}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
+            # Отображаем буфер
+            cv2.imshow("Detection", cv2.resize(display_buffer, (1920, 1080)))
 
             if cv2.waitKey(1) == QUIT_KEY:
                 break
