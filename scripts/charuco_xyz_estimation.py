@@ -91,20 +91,21 @@ class ObjectTracker:
                                   self.camera_matrix, self.dist_coeffs)
         pt_undist = pts[0][0]
 
-        # Создаем луч в 3D пространстве камеры
+        # Создаем луч в 3D пространстве камеры (в системе координат камеры)
         ray_dir = np.array([pt_undist[0], pt_undist[1], 1.0])
         ray_dir = ray_dir / np.linalg.norm(ray_dir)
 
-        # Переводим в мировую систему координат
+        # Переводим луч в мировую систему координат
         rotation_matrix, _ = cv2.Rodrigues(self.ref_rvec)
-        world_ray_dir = rotation_matrix.T @ ray_dir
-        world_ray_origin = rotation_matrix.T @ -self.ref_tvec[0]
+        world_ray_dir = rotation_matrix @ ray_dir  # Направление луча в мировой системе
+        world_ray_origin = self.ref_tvec.reshape(3)  # Позиция камеры в мировой системе
 
-        # Находим пересечение с плоскостью
+        # Находим пересечение с плоскостью (нормаль и d уже в мировой системе)
         denom = np.dot(self.normal, world_ray_dir)
         if abs(denom) > 1e-6:
             t = -(np.dot(self.normal, world_ray_origin) + self.plane_d) / denom
-            return world_ray_origin + t * world_ray_dir
+            intersection = world_ray_origin + t * world_ray_dir
+            return intersection
         return None
 
     def contour_similarity(self, cnt1, cnt2):
