@@ -10,6 +10,7 @@ BOARD_MARKER_LENGTH_M = 0.025
 BOARD_SQUARE_LENGTH_M = 0.03
 BOARD_ARUCO_DICTIONARY = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL)
 PLANE_MARKERS_IDS = (3, 6, 24, 27)
+PLANE_ANCHOR_MARKER_ID = 3
 #####################################################################
 
 
@@ -156,4 +157,70 @@ while True:
 #####################################################################
 
 # 4) Выполняем построение плоскости преобразования
+#####################################################################
+# Инициализация детектора ArUco
+aruco_detector = cv2.aruco.ArucoDetector(BOARD_ARUCO_DICTIONARY, cv2.aruco.DetectorParameters())
+
+# Инициализация окна
+window_name = "Plane Definition"
+cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+while True:
+    ret, frame = cam.read()
+    if not ret:
+        raise Exception("Камера не вернула картинку")
+
+    # Обнаружение маркеров
+    corners, ids, _ = aruco_detector.detectMarkers(frame)
+
+    # Определяем вектора поворота и смещений каждого маркера относительно камеры
+    m_rvecs, m_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
+        corners, BOARD_MARKER_LENGTH_M, camera_matrix, dist_coeffs
+    )
+
+    # Находим вектора опорного маркера
+    for i, marker_id in enumerate(ids.flatten()):
+        if marker_id == PLANE_ANCHOR_MARKER_ID:
+            anchor_rvec = m_rvecs[i]
+            anchor_tvec = m_tvecs[i]
+            break
+
+    # Если нашли опорный маркер, вычисляем плоскость
+    if anchor_rvec is not None:
+        plane_points = []
+        for i, marker_id in enumerate(ids.flatten()):
+            if marker_id in PLANE_MARKERS_IDS:
+                # Преобразуем координаты маркеров, относительно опорного
+                anchor_rot_matrix, _ = cv2.Rodrigues(anchor_rvec)
+                marker_tvec = m_tvecs[i][0] - anchor_tvec[0]
+                world_coords = anchor_rot_matrix.T @ marker_tvec
+                plane_points.append(world_coords)
+
+    # Вычисляем уравнение плоскости
+    if len(plane_points) > 0:
+        points = numpy.array(plane_points)
+        centroid = numpy.mean(points, axis=0)
+        centered = points - centroid
+        _, _, vh = numpy.linalg.svd(centered)
+        normal = vh[2, :]
+        d = -numpy.dot(normal, centroid)
+
+    # Отображаем уравнение плоскости
+    cv2.putText(frame,
+                f"Plane: {normal[0]:.2f}x + {normal[1]:.2f}y + {normal[2]:.2f}z + {d:.2f} = 0",
+                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    cv2.putText(
+        frame,
+        f"Press 'Enter' to continue",
+        (10, 60),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1,
+        (0, 0, 255),
+        2
+    )
+    cv2.imshow(window_name, frame)
+    if cv2.waitKey(1) & 0xFF == ord("\r"):
+        cv2.destroyAllWindows()
+
+
 #####################################################################
