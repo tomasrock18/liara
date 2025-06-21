@@ -421,7 +421,7 @@ window_name = "3D Coordinates Detection"
 cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
 # Параметры для сравнения контуров
-MIN_SIMILARITY = 0.7  # Минимальный коэффициент схожести контуров
+MIN_SIMILARITY = 0.1  # Минимальный коэффициент схожести контуров
 
 
 def contour_similarity(contour1, contour2):
