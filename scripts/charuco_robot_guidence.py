@@ -271,9 +271,21 @@ while True:
 window_name = "Object Detection"
 cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
-# Параметры обработки
-THRESHOLD = 25  # Порог для бинаризации разницы
-MIN_CONTOUR_AREA = 500  # Минимальная площадь контура
+# Инициализация параметров
+threshold_value = 25
+min_area_value = 500
+
+# Создание трекбаров
+def on_threshold_change(val):
+    global threshold_value
+    threshold_value = val
+
+def on_min_area_change(val):
+    global min_area_value
+    min_area_value = val
+
+cv2.createTrackbar('Threshold', window_name, threshold_value, 255, on_threshold_change)
+cv2.createTrackbar('Min Area', window_name, min_area_value, 5000, on_min_area_change)
 
 while True:
     ret, frame = cam.read()
@@ -287,8 +299,8 @@ while True:
     # 2. Вычисляем абсолютную разницу
     diff = cv2.absdiff(gray_bg, gray_frame)
 
-    # 3. Бинаризация разницы
-    _, thresh = cv2.threshold(diff, THRESHOLD, 255, cv2.THRESH_BINARY)
+    # 3. Бинаризация разницы с текущим значением threshold
+    _, thresh = cv2.threshold(diff, threshold_value, 255, cv2.THRESH_BINARY)
 
     # 4. Морфологические операции для улучшения маски
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -302,8 +314,8 @@ while True:
     result_frame = frame.copy()
 
     for contour in contours:
-        # Фильтрация мелких контуров
-        if cv2.contourArea(contour) < MIN_CONTOUR_AREA:
+        # Фильтрация мелких контуров с текущим значением min_area
+        if cv2.contourArea(contour) < min_area_value:
             continue
 
         # Отрисовка контура
@@ -322,8 +334,13 @@ while True:
             cv2.putText(result_frame, f"({cX}, {cY})", (cX - 50, cY - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
-    cv2.putText(result_frame, "Press 'Enter' to exit", (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    # Отображение текущих значений параметров
+    cv2.putText(result_frame, f"Threshold: {threshold_value}", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    cv2.putText(result_frame, f"Min Area: {min_area_value}", (10, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    cv2.putText(result_frame, "Press 'Enter' to exit", (10, 90),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     cv2.imshow(window_name, result_frame)
     if cv2.waitKey(1) & 0xFF == ord("\r"):
