@@ -15,6 +15,9 @@ MIN_CONTOUR_AREA = 500
 SIMILARITY_THRESHOLD = 0.7
 #####################################################################
 
+threshold_value = 25
+similarity_threshold = 0.7
+
 def setup_camera():
     cam = cv2.VideoCapture(CAMERA_ID, cv2.CAP_DSHOW)
     cam.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_FRAME_SIZE[0])
@@ -238,15 +241,29 @@ def detect_objects(cam, bg, camera_matrix, plane_normal, plane_d, anchor_rot_mat
     window_name = "3D Coordinates Detection"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
+    # Глобальные переменные для trackbar'ов
+    global threshold_value, similarity_threshold
+    threshold_value = 25
+    similarity_threshold = 0.7
+
+    # Создаем трекбары
+    cv2.createTrackbar('Threshold', window_name, threshold_value, 255, lambda x: None)
+    cv2.createTrackbar('Similarity Threshold', window_name, int(similarity_threshold * 100), 100,
+                       lambda x: None)  # масштабируем до 0-100
+
     while True:
         ret, frame = cam.read()
         if not ret:
             raise Exception("Камера не вернула картинку")
 
+        # Получаем текущие значения из трекбаров
+        current_threshold = cv2.getTrackbarPos('Threshold', window_name)
+        current_similarity_threshold = cv2.getTrackbarPos('Similarity Threshold', window_name) / 100.0
+
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray_bg = cv2.cvtColor(bg, cv2.COLOR_BGR2GRAY)
         diff = cv2.absdiff(gray_bg, gray_frame)
-        _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(diff, current_threshold, 255, cv2.THRESH_BINARY)
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
 
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -256,8 +273,9 @@ def detect_objects(cam, bg, camera_matrix, plane_normal, plane_d, anchor_rot_mat
             for cnt in contours:
                 if cv2.contourArea(cnt) < MIN_CONTOUR_AREA:
                     continue
+
                 similarity = cv2.matchShapes(template_contour, cnt, cv2.CONTOURS_MATCH_I2, 0)
-                if similarity > SIMILARITY_THRESHOLD:
+                if similarity > current_similarity_threshold:
                     continue
 
                 M = cv2.moments(cnt)
@@ -271,14 +289,18 @@ def detect_objects(cam, bg, camera_matrix, plane_normal, plane_d, anchor_rot_mat
                     world_coords = anchor_rot_matrix.T @ (point_3d - anchor_tvec[0])
                     cv2.drawContours(result, [cnt], -1, (0, 255, 0), 2)
                     cv2.circle(result, (cX, cY), 5, (0, 0, 255), -1)
-                    cv2.putText(result, f"X:{world_coords[0]:.1f} Y:{world_coords[1]:.1f} Z:{world_coords[2]:.1f}",
-                                (cX - 100, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                    cv2.putText(result,
+                                f"X:{world_coords[0]:.1f} Y:{world_coords[1]:.1f} Z:{world_coords[2]:.1f}",
+                                (cX - 100, cY - 20),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
+        # Отображение информации
         cv2.putText(result, "Detecting similar objects on plane", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.putText(result, "Press 'Enter' to exit", (10, 60),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         cv2.imshow(window_name, result)
+
         if cv2.waitKey(1) & 0xFF == 13:
             cv2.destroyAllWindows()
             break
