@@ -239,3 +239,29 @@ while True:
         break
 
 #####################################################################
+
+# 6) Выполняем извлечение заднего фона для обнаружения опорного контура
+#####################################################################
+while True:
+    ret, frame = cam.read()
+    if not ret:
+        raise Exception("Камера не вернула картинку")
+
+    bg = frame
+
+    cv2.putText(
+        frame,
+        f"Press 'Enter' to continue",
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1,
+        (0, 0, 255),
+        2
+    )
+
+    cv2.imshow("Background Extractor", frame)
+    if cv2.waitKey(1) & 0xFF == ord("\r"):
+        cv2.destroyAllWindows()
+        break
+
+#####################################################################
