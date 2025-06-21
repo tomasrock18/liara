@@ -236,5 +236,6 @@ while True:
     cv2.imshow(window_name, frame)
     if cv2.waitKey(1) & 0xFF == ord("\r"):
         cv2.destroyAllWindows()
+        break
 
 #####################################################################
