@@ -105,7 +105,7 @@ while True:
     charuco_corners, charuco_ids, _, _ = detector.detectBoard(grey)
 
     # Отрисовка ну и обработка + разметка
-    if None not in (charuco_corners, charuco_ids):
+    if charuco_ids is not None and charuco_corners is not None:
         cv2.aruco.drawDetectedCornersCharuco(frame, charuco_corners, charuco_ids)
 
     cv2.putText(
@@ -137,10 +137,11 @@ while True:
     )
 
     cv2.imshow(window_name, frame)
-    if cv2.waitKey(1) & 0xFF == ord("a"):
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord("a"):
         all_charuco_corners.append(charuco_corners)
         all_charuco_ids.append(charuco_ids)
-    elif cv2.waitKey(1) & 0xFF == ord("\r"):
+    elif key == ord("\r"):
         projection_error_calibration, camera_matrix, dist_coeffs, _, _ = cv2.aruco.calibrateCameraCharuco(
             all_charuco_corners,
             all_charuco_ids,
