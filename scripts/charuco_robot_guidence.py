@@ -265,3 +265,82 @@ while True:
         break
 
 #####################################################################
+
+# 7) Детекция объектов с улучшенным вычитанием фона
+#####################################################################
+window_name = "Object Detection"
+cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+# Инициализация детектора фона с оптимальными параметрами
+bg_subtractor = cv2.createBackgroundSubtractorMOG2(
+    history=500,  # Количество кадров для обучения фона
+    varThreshold=16,  # Порог дисперсии для разделения фона/переднего плана
+    detectShadows=False  # Не учитывать тени
+)
+
+# Ядро для морфологических операций
+kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+
+# Минимальная площадь контура для фильтрации шума
+MIN_CONTOUR_AREA = 500
+
+# Счетчик кадров для обучения фона
+learning_frames = 0
+
+while True:
+    ret, frame = cam.read()
+    if not ret:
+        raise Exception("Камера не вернула картинку")
+
+    # 1. Обучение фона (первые 50 кадров)
+    if learning_frames < 50:
+        bg_subtractor.apply(frame, learningRate=0.5)  # Быстрое обучение
+        learning_frames += 1
+        cv2.putText(frame, "Learning background...", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        cv2.imshow(window_name, frame)
+        cv2.waitKey(30)
+        continue
+
+    # 2. Вычитание фона
+    fg_mask = bg_subtractor.apply(frame, learningRate=0.001)  # Медленная адаптация
+
+    # 3. Улучшение маски
+    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)  # Удаление шума
+    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)  # Заполнение дыр
+
+    # 4. Поиск контуров
+    contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # 5. Отрисовка результатов
+    result_frame = frame.copy()
+
+    for contour in contours:
+        # Фильтрация по площади
+        if cv2.contourArea(contour) < MIN_CONTOUR_AREA:
+            continue
+
+        # Отрисовка контура
+        cv2.drawContours(result_frame, [contour], -1, (0, 255, 0), 2)
+
+        # Ограничивающий прямоугольник
+        x, y, w, h = cv2.boundingRect(contour)
+        cv2.rectangle(result_frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+
+        # Центр масс
+        M = cv2.moments(contour)
+        if M["m00"] != 0:
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+            cv2.circle(result_frame, (cX, cY), 5, (0, 0, 255), -1)
+            cv2.putText(result_frame, f"({cX}, {cY})", (cX - 50, cY - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+    cv2.putText(result_frame, "Press 'Enter' to exit", (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+    cv2.imshow(window_name, result_frame)
+    if cv2.waitKey(1) & 0xFF == ord("\r"):
+        cv2.destroyAllWindows()
+        break
+#####################################################################
