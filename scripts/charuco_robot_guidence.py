@@ -266,7 +266,7 @@ while True:
 
 #####################################################################
 
-# 7) Детекция объектов через вычитание фона
+# 7) Детекция объектов через вычитание фона с ROI
 #####################################################################
 window_name = "Object Detection"
 cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -274,35 +274,83 @@ cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 # Инициализация параметров
 threshold_value = 25
 min_area_value = 500
+roi_top = 0
+roi_bottom = 100
+roi_left = 0
+roi_right = 100
+
 
 # Создание трекбаров
 def on_threshold_change(val):
     global threshold_value
     threshold_value = val
 
+
 def on_min_area_change(val):
     global min_area_value
     min_area_value = val
 
+
+def on_roi_top_change(val):
+    global roi_top
+    roi_top = val
+
+
+def on_roi_bottom_change(val):
+    global roi_bottom
+    roi_bottom = val
+
+
+def on_roi_left_change(val):
+    global roi_left
+    roi_left = val
+
+
+def on_roi_right_change(val):
+    global roi_right
+    roi_right = val
+
+
 cv2.createTrackbar('Threshold', window_name, threshold_value, 255, on_threshold_change)
 cv2.createTrackbar('Min Area', window_name, min_area_value, 5000, on_min_area_change)
+cv2.createTrackbar('ROI Top', window_name, roi_top, 100, on_roi_top_change)
+cv2.createTrackbar('ROI Bottom', window_name, roi_bottom, 100, on_roi_bottom_change)
+cv2.createTrackbar('ROI Left', window_name, roi_left, 100, on_roi_left_change)
+cv2.createTrackbar('ROI Right', window_name, roi_right, 100, on_roi_right_change)
 
 while True:
     ret, frame = cam.read()
     if not ret:
         raise Exception("Камера не вернула картинку")
 
-    # 1. Преобразуем кадры в grayscale для вычитания
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    gray_bg = cv2.cvtColor(bg, cv2.COLOR_BGR2GRAY)
+    # Преобразование значений ROI в абсолютные координаты
+    height, width = frame.shape[:2]
+    top = int(height * roi_top / 100)
+    bottom = int(height * roi_bottom / 100)
+    left = int(width * roi_left / 100)
+    right = int(width * roi_right / 100)
+
+    # Ограничение значений ROI
+    top = max(0, min(top, height - 1))
+    bottom = max(top + 1, min(bottom, height))
+    left = max(0, min(left, width - 1))
+    right = max(left + 1, min(right, width))
+
+    # Выделение ROI
+    roi_frame = frame[top:bottom, left:right]
+    roi_bg = bg[top:bottom, left:right]
+
+    # 1. Преобразуем ROI в grayscale
+    gray_frame = cv2.cvtColor(roi_frame, cv2.COLOR_BGR2GRAY)
+    gray_bg = cv2.cvtColor(roi_bg, cv2.COLOR_BGR2GRAY)
 
     # 2. Вычисляем абсолютную разницу
     diff = cv2.absdiff(gray_bg, gray_frame)
 
-    # 3. Бинаризация разницы с текущим значением threshold
+    # 3. Бинаризация разницы
     _, thresh = cv2.threshold(diff, threshold_value, 255, cv2.THRESH_BINARY)
 
-    # 4. Морфологические операции для улучшения маски
+    # 4. Морфологические операции
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
     thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
@@ -313,20 +361,28 @@ while True:
     # 6. Отрисовка результатов
     result_frame = frame.copy()
 
+    # Отрисовка линий ROI
+    cv2.line(result_frame, (left, top), (right, top), (255, 255, 0), 2)
+    cv2.line(result_frame, (right, top), (right, bottom), (255, 255, 0), 2)
+    cv2.line(result_frame, (right, bottom), (left, bottom), (255, 255, 0), 2)
+    cv2.line(result_frame, (left, bottom), (left, top), (255, 255, 0), 2)
+
     for contour in contours:
-        # Фильтрация мелких контуров с текущим значением min_area
         if cv2.contourArea(contour) < min_area_value:
             continue
 
+        # Корректировка координат контура относительно полного кадра
+        offset_contour = contour + (left, top)
+
         # Отрисовка контура
-        cv2.drawContours(result_frame, [contour], -1, (0, 255, 0), 2)
+        cv2.drawContours(result_frame, [offset_contour], -1, (0, 255, 0), 2)
 
         # Ограничивающий прямоугольник
-        x, y, w, h = cv2.boundingRect(contour)
+        x, y, w, h = cv2.boundingRect(offset_contour)
         cv2.rectangle(result_frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
 
         # Центр масс
-        M = cv2.moments(contour)
+        M = cv2.moments(offset_contour)
         if M["m00"] != 0:
             cX = int(M["m10"] / M["m00"])
             cY = int(M["m01"] / M["m00"])
@@ -334,12 +390,15 @@ while True:
             cv2.putText(result_frame, f"({cX}, {cY})", (cX - 50, cY - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
-    # Отображение текущих значений параметров
-    cv2.putText(result_frame, f"Threshold: {threshold_value}", (10, 30),
+    # Отображение параметров
+    info_y = 30
+    cv2.putText(result_frame, f"Threshold: {threshold_value}", (10, info_y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-    cv2.putText(result_frame, f"Min Area: {min_area_value}", (10, 60),
+    cv2.putText(result_frame, f"Min Area: {min_area_value}", (10, info_y + 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-    cv2.putText(result_frame, "Press 'Enter' to exit", (10, 90),
+    cv2.putText(result_frame, f"ROI: {left}:{right}, {top}:{bottom}", (10, info_y + 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+    cv2.putText(result_frame, "Press 'Enter' to exit", (10, info_y + 90),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     cv2.imshow(window_name, result_frame)
