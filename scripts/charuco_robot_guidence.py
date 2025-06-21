@@ -323,7 +323,7 @@ while True:
     if not ret:
         raise Exception("Камера не вернула картинку")
 
-    # Преобразование значений ROI в абсолютные координаты
+    # Преобразование значений ROI в относительные координаты
     height, width = frame.shape[:2]
     top = int(height * roi_top / 100)
     bottom = int(height * roi_bottom / 100)
@@ -376,10 +376,6 @@ while True:
 
         # Отрисовка контура
         cv2.drawContours(result_frame, [offset_contour], -1, (0, 255, 0), 2)
-
-        # Ограничивающий прямоугольник
-        x, y, w, h = cv2.boundingRect(offset_contour)
-        cv2.rectangle(result_frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
 
         # Центр масс
         M = cv2.moments(offset_contour)
