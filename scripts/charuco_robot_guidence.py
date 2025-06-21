@@ -322,14 +322,10 @@ while True:
             cv2.putText(result_frame, f"({cX}, {cY})", (cX - 50, cY - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
-    # Дополнительно показываем маску для отладки
-    debug_frame = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
-    combined = numpy.hstack((result_frame, debug_frame))
-
-    cv2.putText(combined, "Press 'Enter' to exit", (10, 30),
+    cv2.putText(result_frame, "Press 'Enter' to exit", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-    cv2.imshow(window_name, combined)
+    cv2.imshow(window_name, result_frame)
     if cv2.waitKey(1) & 0xFF == ord("\r"):
         cv2.destroyAllWindows()
         break
