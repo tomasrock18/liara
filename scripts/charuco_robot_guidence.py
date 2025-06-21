@@ -179,15 +179,16 @@ while True:
     )
 
     # Находим вектора опорного маркера
-    for i, marker_id in enumerate(ids.flatten()):
-        if marker_id == PLANE_ANCHOR_MARKER_ID:
-            anchor_rvec = m_rvecs[i]
-            anchor_tvec = m_tvecs[i]
-            break
+    if m_rvecs is not None:
+        for i, marker_id in enumerate(ids.flatten()):
+            if marker_id == PLANE_ANCHOR_MARKER_ID:
+                anchor_rvec = m_rvecs[i]
+                anchor_tvec = m_tvecs[i]
+                break
 
     # Если нашли опорный маркер, вычисляем плоскость
+    plane_points = []
     if anchor_rvec is not None:
-        plane_points = []
         for i, marker_id in enumerate(ids.flatten()):
             if marker_id in PLANE_MARKERS_IDS:
                 # Преобразуем координаты маркеров, относительно опорного
@@ -205,10 +206,10 @@ while True:
         normal = vh[2, :]
         d = -numpy.dot(normal, centroid)
 
-    # Отображаем уравнение плоскости
-    cv2.putText(frame,
-                f"Plane: {normal[0]:.2f}x + {normal[1]:.2f}y + {normal[2]:.2f}z + {d:.2f} = 0",
-                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        # Отображаем уравнение плоскости
+        cv2.putText(frame,
+                    f"Plane: {normal[0]:.2f}x + {normal[1]:.2f}y + {normal[2]:.2f}z + {d:.2f} = 0",
+                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     cv2.putText(
         frame,
         f"Press 'Enter' to continue",
@@ -221,6 +222,5 @@ while True:
     cv2.imshow(window_name, frame)
     if cv2.waitKey(1) & 0xFF == ord("\r"):
         cv2.destroyAllWindows()
-
 
 #####################################################################
