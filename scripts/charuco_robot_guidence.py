@@ -146,7 +146,7 @@ while True:
             all_charuco_corners,
             all_charuco_ids,
             calibration_board,
-            frame.shape,
+            grey.shape,
             cameraMatrix=None,
             distCoeffs=None,
         )
