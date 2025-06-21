@@ -179,23 +179,37 @@ while True:
     )
 
     # Находим вектора опорного маркера
-    if m_rvecs is not None:
+    anchor_rvec = None
+    anchor_tvec = None
+    if m_rvecs is not None and ids is not None:
         for i, marker_id in enumerate(ids.flatten()):
             if marker_id == PLANE_ANCHOR_MARKER_ID:
                 anchor_rvec = m_rvecs[i]
                 anchor_tvec = m_tvecs[i]
+                # Отрисовка осей для якорного маркера
+                cv2.drawFrameAxes(frame, camera_matrix, dist_coeffs, anchor_rvec, anchor_tvec,
+                                  BOARD_MARKER_LENGTH_M * 1.5)
                 break
 
-    # Если нашли опорный маркер, вычисляем плоскость
+    # Если нашли опорный маркер, вычисляем плоскость и отрисовываем мировые координаты
     plane_points = []
-    if anchor_rvec is not None:
+    if anchor_rvec is not None and m_rvecs is not None and ids is not None:
+        anchor_rot_matrix, _ = cv2.Rodrigues(anchor_rvec)
         for i, marker_id in enumerate(ids.flatten()):
             if marker_id in PLANE_MARKERS_IDS:
                 # Преобразуем координаты маркеров, относительно опорного
-                anchor_rot_matrix, _ = cv2.Rodrigues(anchor_rvec)
                 marker_tvec = m_tvecs[i][0] - anchor_tvec[0]
                 world_coords = anchor_rot_matrix.T @ marker_tvec
                 plane_points.append(world_coords)
+
+                # Отрисовка мировых координат только для целевых маркеров
+                text_pos = tuple(map(int, corners[i][0][0]))
+                cv2.putText(frame, f"ID:{marker_id} X:{world_coords[0]:.3f}", (text_pos[0], text_pos[1] - 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                cv2.putText(frame, f"Y:{world_coords[1]:.3f}", (text_pos[0], text_pos[1] - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                cv2.putText(frame, f"Z:{world_coords[2]:.3f}", (text_pos[0], text_pos[1] + 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
     # Вычисляем уравнение плоскости
     if len(plane_points) > 0:
