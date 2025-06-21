@@ -266,57 +266,43 @@ while True:
 
 #####################################################################
 
-# 7) Детекция объектов с улучшенным вычитанием фона
+# 7) Детекция объектов через вычитание фона
 #####################################################################
 window_name = "Object Detection"
 cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
-# Инициализация детектора фона с оптимальными параметрами
-bg_subtractor = cv2.createBackgroundSubtractorMOG2(
-    history=500,  # Количество кадров для обучения фона
-    varThreshold=16,  # Порог дисперсии для разделения фона/переднего плана
-    detectShadows=False  # Не учитывать тени
-)
-
-# Ядро для морфологических операций
-kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-
-# Минимальная площадь контура для фильтрации шума
-MIN_CONTOUR_AREA = 500
-
-# Счетчик кадров для обучения фона
-learning_frames = 0
+# Параметры обработки
+THRESHOLD = 25  # Порог для бинаризации разницы
+MIN_CONTOUR_AREA = 500  # Минимальная площадь контура
 
 while True:
     ret, frame = cam.read()
     if not ret:
         raise Exception("Камера не вернула картинку")
 
-    # 1. Обучение фона (первые 50 кадров)
-    if learning_frames < 50:
-        bg_subtractor.apply(frame, learningRate=0.5)  # Быстрое обучение
-        learning_frames += 1
-        cv2.putText(frame, "Learning background...", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        cv2.imshow(window_name, frame)
-        cv2.waitKey(30)
-        continue
+    # 1. Преобразуем кадры в grayscale для вычитания
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gray_bg = cv2.cvtColor(bg, cv2.COLOR_BGR2GRAY)
 
-    # 2. Вычитание фона
-    fg_mask = bg_subtractor.apply(frame, learningRate=0.001)  # Медленная адаптация
+    # 2. Вычисляем абсолютную разницу
+    diff = cv2.absdiff(gray_bg, gray_frame)
 
-    # 3. Улучшение маски
-    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)  # Удаление шума
-    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)  # Заполнение дыр
+    # 3. Бинаризация разницы
+    _, thresh = cv2.threshold(diff, THRESHOLD, 255, cv2.THRESH_BINARY)
 
-    # 4. Поиск контуров
-    contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # 4. Морфологические операции для улучшения маски
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
 
-    # 5. Отрисовка результатов
+    # 5. Поиск контуров
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # 6. Отрисовка результатов
     result_frame = frame.copy()
 
     for contour in contours:
-        # Фильтрация по площади
+        # Фильтрация мелких контуров
         if cv2.contourArea(contour) < MIN_CONTOUR_AREA:
             continue
 
@@ -336,10 +322,14 @@ while True:
             cv2.putText(result_frame, f"({cX}, {cY})", (cX - 50, cY - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
-    cv2.putText(result_frame, "Press 'Enter' to exit", (10, 30),
+    # Дополнительно показываем маску для отладки
+    debug_frame = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
+    combined = numpy.hstack((result_frame, debug_frame))
+
+    cv2.putText(combined, "Press 'Enter' to exit", (10, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-    cv2.imshow(window_name, result_frame)
+    cv2.imshow(window_name, combined)
     if cv2.waitKey(1) & 0xFF == ord("\r"):
         cv2.destroyAllWindows()
         break
